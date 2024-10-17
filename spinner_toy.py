@@ -140,6 +140,7 @@ def alt_mode_button_IRQHandler(pin):
         elif alternate_mode:
             print("No longer in ALT_MODE")
             alternate_mode = False
+            light_up_leds(current_level) #ensure LEDS are correct
         alt_mode_button_state = True
         last_alt_mode_time = current_time
 
