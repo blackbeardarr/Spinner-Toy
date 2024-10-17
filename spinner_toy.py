@@ -2,27 +2,27 @@ from machine import Pin, PWM, Timer
 import time
 
 # Initialize the buttons
-trigger_button = Pin(4, Pin.IN, Pin.PULL_DOWN)
+trigger_button = Pin(5, Pin.IN, Pin.PULL_DOWN)
 trigger_button_state = False
-power_level_button = Pin(27, Pin.IN, Pin.PULL_DOWN)
+power_level_button = Pin(7, Pin.IN, Pin.PULL_DOWN)
 power_level_button_state = False
-alt_mode_button = Pin(26, Pin.IN, Pin.PULL_DOWN)
+alt_mode_button = Pin(6, Pin.IN, Pin.PULL_DOWN)
 alt_mode_button_state = False
 
 # Initialize the servo PWM pin
-pwm_servo = PWM(Pin(1))
+pwm_servo = PWM(Pin(26))
 pwm_servo.freq(50)
 
 # Initialize the motor PWM pin
-pwm_motor_speed = PWM(Pin(3))
+pwm_motor_speed = PWM(Pin(29))
 pwm_motor_speed.freq(50)
 
 # Initialize the LEDs
 led_a = Pin(0, Pin.OUT)
-led_b = Pin(7, Pin.OUT)
-led_c = Pin(6, Pin.OUT)
-led_d = Pin(29, Pin.OUT)
-led_e = Pin(28, Pin.OUT) 
+led_b = Pin(1, Pin.OUT)
+led_c = Pin(2, Pin.OUT)
+led_d = Pin(3, Pin.OUT)
+led_e = Pin(4, Pin.OUT) 
 leds = [led_a, led_b, led_c, led_d, led_e]
 
 # Servo positions
@@ -52,12 +52,6 @@ forward = True
 
 # Set if toy mode is in alternate mode
 alternate_mode = False
-
-# Add these variables for debouncing
-DEBOUNCE_TIME = 200  # Debounce time in milliseconds
-last_trigger_time = 0
-last_power_level_time = 0
-last_alt_mode_time = 0
 
 '''
 Function to light up LEDs
@@ -110,39 +104,28 @@ def run_motor(level):
     servo_timer.init(mode=Timer.ONE_SHOT, period=SERVO_ACTIVATE, callback=move_servo)
 
 def trigger_button_IRQHandler(pin):
-    global trigger_button_state, last_trigger_time
-    current_time = time.ticks_ms()
-    if time.ticks_diff(current_time, last_trigger_time) > DEBOUNCE_TIME:
-        trigger_button_state = True
-        last_trigger_time = current_time
+    global trigger_button_state
+    trigger_button_state = True
 
 def power_level_button_IRQHandler(pin):
-    global power_level_button_state, last_power_level_time
-    current_time = time.ticks_ms()
-    if time.ticks_diff(current_time, last_power_level_time) > DEBOUNCE_TIME:
-        power_level_button_state = True
-        last_power_level_time = current_time
+    global power_level_button_state
+    power_level_button_state = True
 
 def trigger_released_IRQHandler(pin):
-    global trigger_button_state, last_trigger_time
-    current_time = time.ticks_ms()
-    if time.ticks_diff(current_time, last_trigger_time) > DEBOUNCE_TIME:
-        trigger_button_state = True
-        last_trigger_time = current_time
+    global trigger_button_state
+    trigger_button_state = True
 
 def alt_mode_button_IRQHandler(pin):
-    global alt_mode_button_state, alternate_mode, last_alt_mode_time
-    current_time = time.ticks_ms()
-    if time.ticks_diff(current_time, last_alt_mode_time) > DEBOUNCE_TIME:
-        if not alternate_mode:
-            print("Now in ALT_MODE")
-            alternate_mode = True
-        elif alternate_mode:
-            print("No longer in ALT_MODE")
-            alternate_mode = False
-            light_up_leds(current_level) #ensure LEDS are correct
-        alt_mode_button_state = True
-        last_alt_mode_time = current_time
+    global alt_mode_button_state
+    global alternate_mode
+    if not alternate_mode:
+        print("Now in ALT_MODE")
+        alternate_mode = True
+    elif alternate_mode:
+        print("No longer in ALT_MODE")
+        alternate_mode = False
+    alt_mode_button_state = True
+    time.sleep(0.2)
 
 trigger_button.irq(trigger=Pin.IRQ_FALLING, handler=trigger_button_IRQHandler)
 trigger_button.irq(trigger=Pin.IRQ_RISING, handler=trigger_released_IRQHandler)
