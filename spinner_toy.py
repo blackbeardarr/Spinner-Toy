@@ -53,82 +53,70 @@ forward = True
 # Set if toy mode is in alternate mode
 alternate_mode = False
 
-'''
-Function to light up LEDs
-- First turns off all LEDS, then turns on the specified number.
-'''
+ALT_LIGHT_DELAY = 150  # milliseconds
+
+# Debounce variables
+DEBOUNCE_TIME = 200  # 50 ms debounce time
+last_trigger_time = 0
+last_power_level_time = 0
+last_alt_mode_time = 0
+
 def light_up_leds(level):
     for led in leds:
         led.value(0)
     for i in range(level + 1):
         leds[i].value(1)
 
-'''
-Function To light up LEDs in a pattern from 1-5-1 to
-indicate that the toy is in an alternate mode.
-'''
 def alt_light_effect():
     global current_led, forward
-
     for led in leds:
         led.value(0)
-    
     leds[current_led].value(1)
-    
-    # Update the current LED index
     current_led += 1 if forward else -1
     if current_led == len(leds) - 1 or current_led == 0:
         forward = not forward
+    time.sleep_ms(ALT_LIGHT_DELAY)  # Add delay to slow down the effect
 
-'''
-Function to move the servo
-'''
 def move_servo(timer=None):
     pwm_servo.duty_ns(VAL)
-    # Set another timer to move the servo back to MIN after SERVO_BACK time
     servo_return_timer.init(mode=Timer.ONE_SHOT, period=SERVO_RETURN, callback=lambda t: pwm_servo.duty_ns(MIN))
 
-'''
-Function to stop the motor
-'''
 def stop_motor(timer=None):
     pwm_motor_speed.duty_u16(3500)
 
-'''
-Function to run the motor
-'''
 def run_motor(level):
     motor_speed = power_levels[level][1]
     pwm_motor_speed.duty_u16(motor_speed)
     motor_timer.init(mode=Timer.ONE_SHOT, period=MOTOR_ON, callback=stop_motor)
     servo_timer.init(mode=Timer.ONE_SHOT, period=SERVO_ACTIVATE, callback=move_servo)
 
+def debounce(last_time):
+    current_time = time.ticks_ms()
+    if time.ticks_diff(current_time, last_time) > DEBOUNCE_TIME:
+        return True, current_time
+    return False, last_time
+
 def trigger_button_IRQHandler(pin):
-    global trigger_button_state
-    trigger_button_state = True
+    global trigger_button_state, last_trigger_time
+    debounced, last_trigger_time = debounce(last_trigger_time)
+    if debounced:
+        trigger_button_state = True
 
 def power_level_button_IRQHandler(pin):
-    global power_level_button_state
-    power_level_button_state = True
-
-def trigger_released_IRQHandler(pin):
-    global trigger_button_state
-    trigger_button_state = True
+    global power_level_button_state, last_power_level_time
+    debounced, last_power_level_time = debounce(last_power_level_time)
+    if debounced:
+        power_level_button_state = True
 
 def alt_mode_button_IRQHandler(pin):
-    global alt_mode_button_state
-    global alternate_mode
-    if not alternate_mode:
-        print("Now in ALT_MODE")
-        alternate_mode = True
-    elif alternate_mode:
-        print("No longer in ALT_MODE")
-        alternate_mode = False
-    alt_mode_button_state = True
-    time.sleep(0.2)
+    global alt_mode_button_state, alternate_mode, last_alt_mode_time
+    debounced, last_alt_mode_time = debounce(last_alt_mode_time)
+    if debounced:
+        alternate_mode = not alternate_mode
+        print("Now in ALT_MODE" if alternate_mode else "No longer in ALT_MODE")
+        alt_mode_button_state = True
 
 trigger_button.irq(trigger=Pin.IRQ_FALLING, handler=trigger_button_IRQHandler)
-trigger_button.irq(trigger=Pin.IRQ_RISING, handler=trigger_released_IRQHandler)
 power_level_button.irq(trigger=Pin.IRQ_FALLING, handler=power_level_button_IRQHandler)
 alt_mode_button.irq(trigger=Pin.IRQ_FALLING, handler=alt_mode_button_IRQHandler)
 
@@ -145,15 +133,17 @@ light_up_leds(current_level)
 while True:
     if alternate_mode:
         alt_light_effect()
-        while trigger_button_state:
+        if trigger_button_state:
             light_up_leds(current_level)
             pwm_motor_speed.duty_u16(power_levels[current_level][1])
-            if not trigger_button.value():
-                trigger_button_state = False
-                move_servo()
-                time.sleep(0.1)
-                stop_motor()
-                break
+            while trigger_button.value():
+                time.sleep(0.01)
+            trigger_button_state = False
+            move_servo()
+            time.sleep(0.1)
+            stop_motor()
+    else:
+        light_up_leds(current_level)  # Add this to ensure LEDs show correct level when not in alt mode
 
     if power_level_button_state:
         current_level = (current_level + 1) % len(leds)
@@ -167,4 +157,4 @@ while True:
         trigger_button_state = False
         time.sleep(0.1)
 
-    time.sleep(0.1)
+    time.sleep(0.01)
